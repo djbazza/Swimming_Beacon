@@ -3,32 +3,23 @@
 #include <BLEUtils.h>
 #include <BLEScan.h>
 #include <BLEAdvertisedDevice.h>
-#define GPIO_DEEP_SLEEP_DURATION     250  // sleep x milli seconds and then wake up
+#define SCAN_DURATION     250  // scan x milli seconds and then check distance
 
 unsigned long prev;
-//struct timeval now;
-unsigned int numVals;
-double trigger;
+unsigned int numVals; //number of values received
+double trigger; //RSSI threshold to trigger light and haptic feedback
 
 class IBeaconAdvertised: public BLEAdvertisedDeviceCallbacks {
   public:
-    double dist;
-    unsigned long elapse;
+    double dist; //RSSI value to know how close you are to the beacon
 
-    // BLE検出時のコールバック
     void onResult(BLEAdvertisedDevice device) {
       if (!isIBeacon(device)) {
         return;
       }
-      //gettimeofday(&now, NULL);
-      /*M5.Lcd.setCursor(2, 2);
-      M5.Lcd.print("\nTime: ");
-      M5.Lcd.print(millis()-prev);
-      M5.Lcd.print("ms \n");*/
       if(!digitalRead(37))
         trigger = dist;
-      if((millis() - prev) < GPIO_DEEP_SLEEP_DURATION){
-        //if(dist-device.getRSSI()<=2 && dist-device.getRSSI()>=-2)
+      if((millis() - prev) < SCAN_DURATION){
         dist = (dist*numVals++ + device.getRSSI())/numVals;
         return;
       }
@@ -55,9 +46,9 @@ class IBeaconAdvertised: public BLEAdvertisedDeviceCallbacks {
       M5.Lcd.print(trigger);
       M5.Lcd.print("\nChange: ");
       M5.Lcd.print(dist - device.getRSSI());
-      M5.Lcd.print("\nSpeed: ");
-      M5.Lcd.print((dist - device.getRSSI())/((millis() - prev)/1000));
-      M5.Lcd.print("\nDistance: ");
+//      M5.Lcd.print("\nSpeed: ");
+//      M5.Lcd.print((dist - device.getRSSI())/((millis() - prev)/1000));
+      M5.Lcd.print("\nRSSI: ");
       M5.Lcd.print(dist);
       dist = device.getRSSI();
       M5.Lcd.print("\nTime: ");
@@ -67,7 +58,7 @@ class IBeaconAdvertised: public BLEAdvertisedDeviceCallbacks {
     }
 
   private:
-    // iBeaconパケット判定
+    // iBeacon
     bool isIBeacon(BLEAdvertisedDevice device) {
       if (device.getManufacturerData().length() < 25) {
         return false;
@@ -75,13 +66,10 @@ class IBeaconAdvertised: public BLEAdvertisedDeviceCallbacks {
       if (getCompanyId(device) != 0x00DB){ //} or getCompanyId(device) != 0x00DB) {
         return false;
       }
-/*      if (getIBeaconHeader(device) != 0x1502) {
-        return false;
-      }*/
       return true;
     }
 
-    // CompanyId取得
+    // UniqueId
     unsigned short getCompanyId(BLEAdvertisedDevice device) {
       const unsigned short* pCompanyId = (const unsigned short*)&device
                                          .getManufacturerData()
@@ -89,7 +77,7 @@ class IBeaconAdvertised: public BLEAdvertisedDeviceCallbacks {
       return *pCompanyId;
     }
 
-    // iBeacon Header取得
+    // iBeacon Header
     unsigned short getIBeaconHeader(BLEAdvertisedDevice device) {
       const unsigned short* pHeader = (const unsigned short*)&device
                                       .getManufacturerData()
@@ -97,7 +85,7 @@ class IBeaconAdvertised: public BLEAdvertisedDeviceCallbacks {
       return *pHeader;
     }
 
-    // UUID取得
+    // UUID
     String getUuid(BLEAdvertisedDevice device) {
       const char* pUuid = &device.getManufacturerData().c_str()[4];
       char uuid[64] = {0};
@@ -110,7 +98,7 @@ class IBeaconAdvertised: public BLEAdvertisedDeviceCallbacks {
       return String(uuid);
     }
 
-    // TxPower取得
+    // TxPower
     signed char getTxPower(BLEAdvertisedDevice device) {
       const signed char* pTxPower = (const signed char*)&device
                                     .getManufacturerData()
@@ -118,9 +106,8 @@ class IBeaconAdvertised: public BLEAdvertisedDeviceCallbacks {
       return *pTxPower;
     }
 
-    // iBeaconの情報をシリアル出力
+    // iBeacon
     void printIBeacon(BLEAdvertisedDevice device) {
-      //gettimeofday(&now, NULL);
       Serial.printf("addr:%s rssi:%d uuid:%s power:%d time:%lf\r\n",
                     device.getAddress().toString().c_str(),
                     device.getRSSI(),
@@ -133,15 +120,15 @@ void setup() {
   M5.begin();
   Serial.begin(115200);
   BLEDevice::init("");
-  pinMode(10, OUTPUT);
-  pinMode(32, OUTPUT);
-  pinMode(37, INPUT);
-  digitalWrite(10, HIGH);
-  M5.Lcd.setRotation(1);
-  M5.Lcd.setCursor(0, 30);
+  pinMode(10, OUTPUT); //ONBOARD LED
+  pinMode(32, OUTPUT); //HAPTIC FEEDBACK
+  pinMode(37, INPUT); //BUTTON TO SET THRESHOLD
+  digitalWrite(10, HIGH); //SET LED OFF
+  M5.Lcd.setRotation(1); //LANDSCAPE DISPLAY
+  M5.Lcd.setCursor(0, 30); 
   M5.Lcd.print("Ready\n");
   numVals = 0;
-  trigger = -70;
+  trigger = -70; //DEFAULT TRIGGER RSSI THRESHOLD
 }
 
 void loop() {
@@ -153,6 +140,4 @@ void loop() {
   scan->setAdvertisedDeviceCallbacks(new IBeaconAdvertised(), true);
   scan->setActiveScan(true);
   scan->start(300,true);
-  //Serial.println("complete.\n");
-  //M5.Lcd.print("complete.\n");
 }
