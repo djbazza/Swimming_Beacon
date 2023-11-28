@@ -1,4 +1,5 @@
 #include <Arduino.h>
+#include "M5Atom.h"
 
 #include "sys/time.h"
 #include "BLEDevice.h"
@@ -8,8 +9,14 @@
 #include "esp_sleep.h"
 
 #define GPIO_DEEP_SLEEP_DURATION     250  // sleep x milli seconds and then wake up
+#define LED_BUILTIN   
 RTC_DATA_ATTR static time_t last;        // remember last boot in RTC Memory
 RTC_DATA_ATTR static uint32_t bootcount; // remember number of boots in RTC Memory
+
+// Variables will change:
+bool ledState = 0;  // ledState used to set the LED
+unsigned long previousMillis = 0;  // will store last time LED was updated
+long interval = 1000;  // interval at which to blink (milliseconds)
 
 // See the following for generating UUIDs:
 // https://www.uuidgenerator.net/
@@ -20,7 +27,7 @@ struct timeval now;
 void setBeacon() {
 
   BLEBeacon oBeacon = BLEBeacon();
-  oBeacon.setManufacturerId(0xDB00); // fake Apple 0x004C LSB (ENDIAN_CHANGE_U16!)
+  oBeacon.setManufacturerId(0xDB00); // UNIQUE ID FOR SWIMMING BEACON
   oBeacon.setProximityUUID(BLEUUID(BEACON_UUID));
   oBeacon.setMajor((bootcount & 0xFFFF0000) >> 16);
   oBeacon.setMinor(bootcount & 0xFFFF);
@@ -41,8 +48,10 @@ void setBeacon() {
 }
 
 void setup() {
-
+  M5.begin(true, false, true);  // Init Atom-Matrix(Initialize serial port, LED).
   Serial.begin(115200);
+  M5.dis.drawpix(0, 0x00ff00);  // Light the LED with the specified RGB color
+
   gettimeofday(&now, NULL);
   Serial.printf("start ESP32 %d\n", bootcount++);
   Serial.printf("deep sleep (%lds since last reset, %lds since last boot)\n", now.tv_sec, now.tv_sec - last);
@@ -63,12 +72,28 @@ void setup() {
   // Start advertising
   pAdvertising->start();
   Serial.println("Advertizing started...");
-  delay(100000);
-  pAdvertising->stop();
-  Serial.printf("enter deep sleep\n");
-  esp_deep_sleep(1000LL * GPIO_DEEP_SLEEP_DURATION);
-  Serial.printf("in deep sleep\n");
+//  delay(100000);
+//  pAdvertising->stop();
+//  Serial.printf("enter deep sleep\n");
+//  esp_deep_sleep(1000LL * GPIO_DEEP_SLEEP_DURATION);
+//  Serial.printf("in deep sleep\n");
 }
 
 void loop() {
+  unsigned long currentMillis = millis();
+
+  if (currentMillis - previousMillis >= interval) {
+    // save the last time you blinked the LED
+    previousMillis = currentMillis;
+
+    // if the LED is off turn it on and vice-versa:
+    if (ledState) {
+        M5.dis.drawpix(0, 0x000000);  // Light the LED with the specified RGB color
+        interval = 10000;
+    } else {
+        M5.dis.drawpix(0, 0x0000ff);  // Light the LED with the specified RGB color
+        interval = 250;
+    }
+    ledState = !ledState;
+  }
 }
